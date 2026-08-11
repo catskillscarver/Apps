@@ -2,684 +2,433 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PrompterCam Studio</title>
-
-    <!-- PWA & Standalone Engine Headers -->
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0c0a05">
-
-    <!-- Linked App Icon & Manifest -->
-    <link rel="icon" type="image/svg+xml" href="icon.svg">
-    <link rel="apple-touch-icon" href="icon.svg">
     <link rel="manifest" href="manifest.json">
-
     <style>
         :root {
-            --crt-amber: #ffb000;
-            --crt-green: #33ff33;
-            --crt-red: #ff3333;
-            --main-color: var(--crt-amber);
-            --bg-color: #0c0a05;
+            --main-color: #00ff66; /* Green default */
+            --bg-color: #050505;
         }
+
+        body.theme-green { --main-color: #00ff66; }
+        body.theme-amber { --main-color: #ffb000; }
+        body.theme-blue  { --main-color: #00aeff; }
 
         * {
             box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         body {
+            margin: 0;
+            padding: 0;
             background-color: var(--bg-color);
             color: var(--main-color);
             font-family: 'Courier New', Courier, monospace;
-            height: 100vh;
-            width: 100vw;
             overflow: hidden;
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            position: relative;
         }
 
-        /* LIVE CAMERA PREVIEW BACKDROP */
-        #cameraPreview {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            object-fit: cover;
-            z-index: 10;
-            transform: scaleX(-1);
-        }
-
-        /* FRAMING GRID OVERLAY */
-        #framingGrid {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            z-index: 15;
-            pointer-events: none;
-            border: 1px dashed rgba(255, 255, 255, 0.2);
-        }
-
-        #framingGrid::before, #framingGrid::after {
-            content: "";
-            position: absolute;
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        #framingGrid::before {
-            top: 0; bottom: 0;
-            left: 33.33%; right: 33.33%;
-            border-left: 1px dashed rgba(255, 255, 255, 0.3);
-            border-right: 1px dashed rgba(255, 255, 255, 0.3);
-        }
-
-        #framingGrid::after {
-            left: 0; right: 0;
-            top: 33.33%; bottom: 33.33%;
-            border-top: 1px dashed rgba(255, 255, 255, 0.3);
-            border-bottom: 1px dashed rgba(255, 255, 255, 0.3);
-        }
-
-        /* RETRO CRT SCANLINES */
-        body::before {
-            content: " ";
-            display: block;
-            position: absolute;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
-            z-index: 200;
-            background-size: 100% 4px, 6px 100%;
-            pointer-events: none;
-        }
-
-        body::after {
-            content: " ";
-            display: block;
-            position: absolute;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.85) 100%);
-            pointer-events: none;
-            z-index: 201;
-        }
-
-        /* HIGH-EYELINE FOCUS GUIDE AT TOP OF SCREEN */
-        .focus-overlay {
-            position: fixed;
-            top: 10px;
-            left: 0; right: 0;
-            height: 180px;
-            background: rgba(255, 176, 0, 0.08);
-            border-top: 2px dashed var(--main-color);
-            border-bottom: 2px dashed var(--main-color);
-            pointer-events: none;
-            z-index: 100;
-        }
-
-        /* MAXIMIZED TELEPROMPTER SCROLL BOX */
-        .prompter-container {
+        #prompter-display {
             flex: 1;
             overflow-y: scroll;
-            margin-top: 0px;
-            margin-bottom: 70px;
+            padding: 20px;
+            font-size: 32px;
+            line-height: 1.6;
+            text-align: center;
+            font-weight: bold;
             scrollbar-width: none;
-            -ms-overflow-style: none;
-            z-index: 50;
-            background: rgba(12, 10, 5, 0.45);
         }
 
-        .prompter-container::-webkit-scrollbar {
+        #prompter-display::-webkit-scrollbar {
             display: none;
         }
 
-        .prompter-content {
-            padding-top: 20px;
-            padding-bottom: 80vh;
-            text-align: center;
-        }
-
-        .prompter-text {
-            font-weight: 700;
-            line-height: 1.4;
-            text-shadow: 0 0 10px var(--main-color), 0 0 20px #000, 0 0 30px #000;
-            letter-spacing: 1px;
-            word-wrap: break-word;
-            padding: 0 10px;
-        }
-
-        .flipped {
-            transform: scaleX(-1);
-        }
-
-        /* BOTTOM DOCKED CONTROL BAR */
-        .controls {
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            background: rgba(20, 18, 12, 0.95);
-            border-top: 2px solid var(--main-color);
-            padding: 8px 10px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            z-index: 300;
-            box-shadow: 0 -4px 15px rgba(0,0,0,0.8);
-            backdrop-filter: blur(4px);
-        }
-
-        .control-group {
+        #controls {
+            height: 60px;
+            background: #111;
+            border-top: 1px solid var(--main-color);
             display: flex;
             align-items: center;
-            gap: 6px;
+            justify-content: space-around;
+            padding: 0 5px;
+            z-index: 10;
         }
 
         button, select {
-            background: #242014;
+            background: #000;
             color: var(--main-color);
             border: 1px solid var(--main-color);
-            padding: 6px 8px;
-            font-family: 'Courier New', Courier, monospace;
-            font-weight: bold;
-            font-size: 11px;
-            cursor: pointer;
-            border-radius: 2px;
-            text-transform: uppercase;
+            padding: 6px 10px;
+            font-family: inherit;
+            font-size: 12px;
+            border-radius: 3px;
         }
 
-        button:active, button.active {
+        button:active {
             background: var(--main-color);
             color: #000;
         }
 
-        .step-btn {
-            padding: 4px 8px;
-            font-size: 13px;
-            line-height: 1;
-            min-width: 28px;
-            text-align: center;
-        }
-
-        button.recording {
-            background: var(--crt-red) !important;
-            color: #fff !important;
-            border-color: #fff !important;
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
-        select {
-            outline: none;
-            max-width: 100px;
-        }
-
-        .slider-label {
-            font-size: 10px;
+        .speed-btn {
+            width: 36px;
+            font-size: 16px;
             font-weight: bold;
-            text-transform: uppercase;
+            touch-action: manipulation;
         }
 
-        input[type="range"] {
-            accent-color: var(--main-color);
-            cursor: pointer;
-            width: 50px;
-        }
-
-        /* MODAL */
-        .modal {
+        /* Script Manager Modal */
+        #modal-overlay {
             display: none;
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.95);
-            z-index: 400;
-            padding: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
             flex-direction: column;
-            gap: 12px;
+            padding: 20px;
         }
 
-        .modal.open {
+        #modal-overlay.active {
             display: flex;
         }
 
-        .modal input[type="text"], .modal textarea {
-            background: #050505;
+        .modal-header {
+            font-size: 18px;
+            border-bottom: 1px solid var(--main-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .folder-view, .editor-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .script-list {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+
+        .script-item {
+            padding: 12px;
+            border: 1px solid var(--main-color);
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0a0a0a;
+        }
+
+        textarea {
+            flex: 1;
+            background: #000;
             color: var(--main-color);
             border: 1px solid var(--main-color);
             padding: 10px;
-            font-family: 'Courier New', Courier, monospace;
-            outline: none;
-        }
-
-        .modal textarea {
-            flex: 1;
+            font-family: inherit;
             font-size: 16px;
             resize: none;
+            margin-bottom: 15px;
         }
 
-        /* MEDIA PLAYBACK PANEL */
-        #mediaPlayerContainer {
-            display: none;
-            position: fixed;
-            bottom: 75px; left: 10px; right: 10px;
-            background: #14120c;
-            border: 2px solid var(--main-color);
-            padding: 10px;
-            z-index: 350;
-            align-items: center;
-            justify-content: space-between;
+        input[type="text"] {
+            background: #000;
+            color: var(--main-color);
+            border: 1px solid var(--main-color);
+            padding: 8px;
+            font-family: inherit;
+            margin-bottom: 10px;
+        }
+
+        .actions {
+            display: flex;
             gap: 10px;
-        }
-
-        @media (max-width: 600px) {
-            .prompter-container { padding: 0 5%; }
-            .prompter-text { font-size: 36px; }
-        }
-
-        @media (min-width: 601px) {
-            .prompter-container { padding: 0 18%; }
-            .prompter-text { font-size: 52px; }
+            justify-content: flex-end;
         }
     </style>
 </head>
-<body>
+<body class="theme-green">
 
-    <!-- Live Camera Backdrop -->
-    <video id="cameraPreview" autoplay playsinline muted></video>
+    <div id="prompter-display">
+        <!-- Script text renders here -->
+    </div>
 
-    <!-- Framing Grid Overlay -->
-    <div id="framingGrid"></div>
-
-    <!-- High Eyeline Focus Box (Top Edge) -->
-    <div class="focus-overlay"></div>
-
-    <!-- Maximized Scrolling Area -->
-    <div class="prompter-container" id="scrollBox" onclick="handleContainerClick(event)">
-        <div class="prompter-content" id="textContent">
-            <div class="prompter-text" id="scriptDisplay"></div>
+    <div id="controls">
+        <button id="btn-play">PLAY</button>
+        <button id="btn-color">COLOR</button>
+        <button id="btn-scripts">SCRIPTS</button>
+        <div style="display: flex; align-items: center; gap: 4px;">
+            <button id="btn-speed-down" class="speed-btn">-</button>
+            <span id="speed-val" style="min-width: 24px; text-align: center;">35</span>
+            <button id="btn-speed-up" class="speed-btn">+</button>
         </div>
     </div>
 
-    <!-- Controls Bar Docked at Bottom -->
-    <div class="controls">
-        <div class="control-group">
-            <button id="toggleBtn" onclick="toggleScroll()">PLAY</button>
-            <button id="camToggleBtn" onclick="toggleCamera()">CAM: OFF</button>
-            <button id="recVideoBtn" onclick="toggleVideoRecording()">REC VIDEO</button>
-            <select id="micSelect" onchange="switchMicrophone()">
-                <option value="">DEFAULT MIC</option>
-            </select>
+    <!-- Script Folder / Editor Modal -->
+    <div id="modal-overlay">
+        <!-- Folder View -->
+        <div id="view-folder" class="folder-view">
+            <div class="modal-header">
+                <span>SCRIPT MANAGER</span>
+                <button id="btn-close-modal">X</button>
+            </div>
+            <div id="script-list" class="script-list"></div>
+            <div class="actions">
+                <button id="btn-new-script">+ NEW SCRIPT</button>
+            </div>
         </div>
 
-        <div class="control-group">
-            <select id="qualitySelect" onchange="updateVideoQuality()">
-                <option value="1080">1080p FHD</option>
-                <option value="2160">4K UHD</option>
-                <option value="720">720p HD</option>
-            </select>
-            <button id="gridToggleBtn" onclick="toggleGrid()">GRID</button>
-            <select id="scriptSelect" onchange="loadSelectedScript()"></select>
-            <button onclick="openModal()">SCRIPTS</button>
-            <button id="colorBtn" onclick="toggleColor()">COLOR</button>
-            <button id="flipBtn" onclick="toggleMirror()">MIRROR</button>
-        </div>
-
-        <!-- FINE-TUNING SPEED CONTROLS -->
-        <div class="control-group">
-            <span class="slider-label">SPD</span>
-            <button class="step-btn" onclick="adjustSpeed(-1)">–</button>
-            <input type="range" id="speedSlider" min="1" max="300" value="30" oninput="updateSpeed(this.value)">
-            <button class="step-btn" onclick="adjustSpeed(1)">+</button>
-            <span id="speedVal" style="font-size:10px; font-weight:bold; min-width: 22px;">30</span>
-        </div>
-    </div>
-
-    <!-- Video Recording Playback Bar -->
-    <div id="mediaPlayerContainer">
-        <span style="font-size: 11px; font-weight: bold;">TAKE READY:</span>
-        <a id="downloadVideoBtn" download="teleprompter_take.webm" style="color: var(--main-color); text-decoration: underline; font-size: 12px; font-weight: bold;">DOWNLOAD TAKE</a>
-        <button onclick="closeMediaPlayer()">DISMISS</button>
-    </div>
-
-    <!-- Script Manager Modal -->
-    <div class="modal" id="editModal">
-        <h3 style="color: var(--main-color);">SCRIPT MANAGER</h3>
-        <input type="text" id="scriptTitleInput" placeholder="Script Title...">
-        <textarea id="scriptTextInput" placeholder="Paste your script text here..."></textarea>
-        <div style="display: flex; gap: 10px; justify-content: space-between; flex-wrap: wrap;">
-            <button onclick="deleteCurrentScript()" style="border-color: var(--crt-red); color: var(--crt-red);">DELETE</button>
-            <div style="display: flex; gap: 10px;">
-                <button onclick="closeModal()">CANCEL</button>
-                <button onclick="saveNewScript()" style="background: var(--main-color); color: #000;">SAVE</button>
+        <!-- Editor View -->
+        <div id="view-editor" class="editor-view" style="display: none;">
+            <div class="modal-header">
+                <span>EDIT SCRIPT</span>
+            </div>
+            <input type="text" id="script-title" placeholder="Script Title">
+            <textarea id="script-body" placeholder="Type or paste script content here..."></textarea>
+            <div class="actions">
+                <button id="btn-delete-script" style="color: #ff4444; border-color: #ff4444;">DELETE</button>
+                <button id="btn-cancel-edit">CANCEL</button>
+                <button id="btn-save-script">SAVE</button>
             </div>
         </div>
     </div>
 
     <script>
-        const defaultLibrary = {
-            "Default - Preservation": `Every piece of fallen timber\n\nhas a story\n\nthat is supposed to end in decay.\n\n\nAs carvers,\n\nwe interrupt that ending.\n\n\nWe force the wood\n\nto take a new breath.\n\n\nWe carve a second life into it.\n\n\nBut no matter how beautiful it becomes,\n\nit’s still on borrowed time.\n\n\nEventually,\n\nthe earth always calls it back.\n\n\nUnless we change the rules.\n\n\nThis step right here...\n\nthis isn't just about making a reproduction.\n\n\nIt’s about preservation.\n\n\nBy taking a fleeting moment\n\nand casting it into stone,\n\nwe freeze time.\n\n\nWe lock the effort,\n\nthe vision,\n\nand the soul of the piece\n\ninto something completely permanent.\n\n\nThis is how I preserve the tree.\n\n\nIt’s how I preserve the art.\n\n\nAnd ultimately,\n\nit’s how I preserve a piece of myself.\n\n\nA permanent gift for my family,\n\nand a quiet monument for the world...\n\n\nlong after the sawdust settles.`
-        };
+        // Default Scripts Data
+        let scripts = JSON.parse(localStorage.getItem('prompter_scripts')) || [
+            {
+                id: '1',
+                title: 'Default - Preservation',
+                content: `Every piece of fallen timber has a story that is supposed to end in decay.\n\nAs carvers, we interrupt that ending.\n\nWe force the wood to take a new breath.\n\nWe carve a second life into it.`
+            }
+        ];
 
+        let activeScriptId = localStorage.getItem('prompter_active_id') || '1';
+        let speed = parseInt(localStorage.getItem('prompter_speed')) || 35;
         let isScrolling = false;
-        let scrollSpeed = 3.0;
-        let scrollBox = document.getElementById('scrollBox');
-        let toggleBtn = document.getElementById('toggleBtn');
-        let recVideoBtn = document.getElementById('recVideoBtn');
-        let camToggleBtn = document.getElementById('camToggleBtn');
-        let gridToggleBtn = document.getElementById('gridToggleBtn');
-        let cameraPreview = document.getElementById('cameraPreview');
-        let framingGrid = document.getElementById('framingGrid');
-        let textContent = document.getElementById('textContent');
-        let scriptDisplay = document.getElementById('scriptDisplay');
-        let scriptTitleInput = document.getElementById('scriptTitleInput');
-        let scriptTextInput = document.getElementById('scriptTextInput');
-        let scriptSelect = document.getElementById('scriptSelect');
-        let micSelect = document.getElementById('micSelect');
-        let qualitySelect = document.getElementById('qualitySelect');
-        let speedSlider = document.getElementById('speedSlider');
-        let speedVal = document.getElementById('speedVal');
-        let editModal = document.getElementById('editModal');
-        let animationFrameId = null;
-        let isAmber = true;
-        let isGridActive = false;
+        let scrollInterval = null;
+        let speedHoldTimer = null;
+        let speedHoldInterval = null;
 
-        let cameraStream = null;
-        let mediaRecorder = null;
-        let recordedChunks = [];
-        let isVideoRecording = false;
+        const themes = ['theme-green', 'theme-amber', 'theme-blue'];
+        let currentThemeIdx = parseInt(localStorage.getItem('prompter_theme_idx')) || 0;
 
-        function triggerNativeFullscreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log("Fullscreen request bypassed");
-                });
-            }
+        // Elements
+        const display = document.getElementById('prompter-display');
+        const btnPlay = document.getElementById('btn-play');
+        const btnColor = document.getElementById('btn-color');
+        const btnScripts = document.getElementById('btn-scripts');
+        const btnSpeedUp = document.getElementById('btn-speed-up');
+        const btnSpeedDown = document.getElementById('btn-speed-down');
+        const speedVal = document.getElementById('speed-val');
+        
+        const modal = document.getElementById('modal-overlay');
+        const viewFolder = document.getElementById('view-folder');
+        const viewEditor = document.getElementById('view-editor');
+        const scriptList = document.getElementById('script-list');
+        const inputTitle = document.getElementById('script-title');
+        const inputBody = document.getElementById('script-body');
+        
+        let editingScriptId = null;
+
+        // Initialize App
+        function init() {
+            applyTheme();
+            updateSpeedDisplay();
+            loadActiveScript();
+            
+            // Event Listeners
+            btnPlay.addEventListener('click', toggleScroll);
+            btnColor.addEventListener('click', cycleTheme);
+            btnScripts.addEventListener('click', openFolder);
+            document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+            
+            setupHoldButton(btnSpeedUp, 1);
+            setupHoldButton(btnSpeedDown, -1);
+
+            document.getElementById('btn-new-script').addEventListener('click', () => openEditor());
+            document.getElementById('btn-cancel-edit').addEventListener('click', showFolderView);
+            document.getElementById('btn-save-script').addEventListener('click', saveScript);
+            document.getElementById('btn-delete-script').addEventListener('click', deleteScript);
         }
 
-        function getLibrary() {
-            const data = localStorage.getItem('teleprompter_library');
-            return data ? JSON.parse(data) : defaultLibrary;
+        // Theme management
+        function applyTheme() {
+            document.body.className = themes[currentThemeIdx];
+            localStorage.setItem('prompter_theme_idx', currentThemeIdx);
         }
 
-        function saveLibrary(lib) {
-            localStorage.setItem('teleprompter_library', JSON.stringify(lib));
-            populateDropdown();
+        function cycleTheme() {
+            currentThemeIdx = (currentThemeIdx + 1) % themes.length;
+            applyTheme();
         }
 
-        function populateDropdown() {
-            const lib = getLibrary();
-            scriptSelect.innerHTML = '';
-            for (let title in lib) {
-                let opt = document.createElement('option');
-                opt.value = title;
-                opt.innerText = title;
-                scriptSelect.appendChild(opt);
-            }
-            const activeTitle = localStorage.getItem('active_script_title') || Object.keys(lib)[0];
-            if (lib[activeTitle]) {
-                scriptSelect.value = activeTitle;
-                displayScript(lib[activeTitle]);
-            }
-        }
-
-        function displayScript(text) {
-            scriptDisplay.innerHTML = text.replace(/\n/g, '<br>');
-        }
-
-        function loadSelectedScript() {
-            const lib = getLibrary();
-            const selectedTitle = scriptSelect.value;
-            if (lib[selectedTitle]) {
-                localStorage.setItem('active_script_title', selectedTitle);
-                displayScript(lib[selectedTitle]);
-                resetScroll();
-            }
-        }
-
-        function scrollStep() {
+        // Speed adjustment with Press & Hold support
+        function changeSpeed(delta) {
+            speed = Math.max(5, Math.min(100, speed + delta));
+            updateSpeedDisplay();
             if (isScrolling) {
-                scrollBox.scrollTop += scrollSpeed / 10;
-                if (scrollBox.scrollTop + scrollBox.clientHeight >= scrollBox.scrollHeight - 5) {
-                    toggleScroll();
-                } else {
-                    animationFrameId = requestAnimationFrame(scrollStep);
-                }
+                startScroll(); // Reset interval timing
             }
         }
 
+        function updateSpeedDisplay() {
+            speedVal.innerText = speed;
+            localStorage.setItem('prompter_speed', speed);
+        }
+
+        function setupHoldButton(btn, delta) {
+            const start = (e) => {
+                e.preventDefault();
+                changeSpeed(delta);
+                speedHoldTimer = setTimeout(() => {
+                    speedHoldInterval = setInterval(() => changeSpeed(delta), 80);
+                }, 300);
+            };
+
+            const stop = () => {
+                clearTimeout(speedHoldTimer);
+                clearInterval(speedHoldInterval);
+            };
+
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', stop);
+            btn.addEventListener('mouseleave', stop);
+            btn.addEventListener('touchstart', start);
+            btn.addEventListener('touchend', stop);
+        }
+
+        // Scrolling Logic
         function toggleScroll() {
-            triggerNativeFullscreen();
-            isScrolling = !isScrolling;
             if (isScrolling) {
-                toggleBtn.innerText = "PAUSE";
-                toggleBtn.classList.add("active");
-                animationFrameId = requestAnimationFrame(scrollStep);
+                stopScroll();
             } else {
-                toggleBtn.innerText = "PLAY";
-                toggleBtn.classList.remove("active");
-                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                startScroll();
             }
         }
 
-        function handleContainerClick(e) {
-            if (e.target.closest('.controls') || e.target.closest('#mediaPlayerContainer')) return;
-            toggleScroll();
+        function startScroll() {
+            stopScroll();
+            isScrolling = true;
+            btnPlay.innerText = "PAUSE";
+            scrollInterval = setInterval(() => {
+                display.scrollTop += 1;
+            }, 1000 / speed);
         }
 
-        function resetScroll() {
-            if (isScrolling) toggleScroll();
-            scrollBox.scrollTop = 0;
+        function stopScroll() {
+            isScrolling = false;
+            btnPlay.innerText = "PLAY";
+            clearInterval(scrollInterval);
         }
 
-        function updateSpeed(val) {
-            speedVal.innerText = val;
-            speedSlider.value = val;
-            scrollSpeed = parseFloat(val) / 10;
-        }
-
-        function adjustSpeed(delta) {
-            let currentVal = parseInt(speedSlider.value) || 30;
-            let newVal = Math.min(300, Math.max(1, currentVal + delta));
-            updateSpeed(newVal);
-        }
-
-        function toggleMirror() {
-            textContent.classList.toggle('flipped');
-            document.getElementById('flipBtn').classList.toggle('active');
-        }
-
-        function toggleColor() {
-            isAmber = !isAmber;
-            const root = document.documentElement;
-            if (isAmber) {
-                root.style.setProperty('--main-color', 'var(--crt-amber)');
-                root.style.setProperty('--bg-color', '#0c0a05');
-            } else {
-                root.style.setProperty('--main-color', 'var(--crt-green)');
-                root.style.setProperty('--bg-color', '#050c05');
+        // Script Loading
+        function loadActiveScript() {
+            const script = scripts.find(s => s.id === activeScriptId) || scripts[0];
+            if (script) {
+                display.innerText = script.content;
+                activeScriptId = script.id;
+                localStorage.setItem('prompter_active_id', activeScriptId);
             }
         }
 
-        async function populateMicrophones() {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioInputs = devices.filter(d => d.kind === 'audioinput');
-                micSelect.innerHTML = '';
-                audioInputs.forEach((device, index) => {
-                    let opt = document.createElement('option');
-                    opt.value = device.deviceId;
-                    opt.innerText = device.label || `Microphone ${index + 1}`;
-                    micSelect.appendChild(opt);
-                });
-            } catch (e) {
-                console.warn("Unable to enumerate audio devices.");
-            }
-        }
-
-        async function switchMicrophone() {
-            if (cameraStream) {
-                await toggleCamera();
-                await toggleCamera();
-            }
-        }
-
-        async function toggleCamera() {
-            triggerNativeFullscreen();
-            if (!cameraStream) {
-                const targetHeight = parseInt(qualitySelect.value) || 1080;
-                const targetWidth = targetHeight === 2160 ? 3840 : (targetHeight === 1080 ? 1920 : 1280);
-                const selectedMicId = micSelect.value;
-
-                const constraints = {
-                    video: {
-                        facingMode: "user",
-                        width: { ideal: targetWidth },
-                        height: { ideal: targetHeight }
-                    },
-                    audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
-                };
-
-                try {
-                    cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-                    cameraPreview.srcObject = cameraStream;
-                    cameraPreview.style.display = 'block';
-                    camToggleBtn.innerText = "CAM: ON";
-                    camToggleBtn.classList.add("active");
-                    await populateMicrophones();
-                } catch (err) {
-                    alert("Unable to access camera or selected microphone.");
-                }
-            } else {
-                let tracks = cameraStream.getTracks();
-                tracks.forEach(track => track.stop());
-                cameraPreview.style.display = 'none';
-                cameraStream = null;
-                camToggleBtn.innerText = "CAM: OFF";
-                camToggleBtn.classList.remove("active");
-            }
-        }
-
-        async function updateVideoQuality() {
-            if (cameraStream) {
-                await toggleCamera();
-                await toggleCamera();
-            }
-        }
-
-        function toggleGrid() {
-            isGridActive = !isGridActive;
-            if (isGridActive) {
-                framingGrid.style.display = 'block';
-                gridToggleBtn.classList.add('active');
-            } else {
-                framingGrid.style.display = 'none';
-                gridToggleBtn.classList.remove('active');
-            }
-        }
-
-        async function toggleVideoRecording() {
-            triggerNativeFullscreen();
-            if (!isVideoRecording) {
-                if (!cameraStream) {
-                    await toggleCamera();
-                }
-                if (!cameraStream) return;
-
-                recordedChunks = [];
-                const options = {
-                    mimeType: 'video/webm;codecs=vp9,opus',
-                    videoBitsPerSecond: 12000000 
-                };
-
-                try {
-                    mediaRecorder = new MediaRecorder(cameraStream, options);
-                } catch (e) {
-                    mediaRecorder = new MediaRecorder(cameraStream);
-                }
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) recordedChunks.push(e.data);
-                };
-
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const url = URL.createObjectURL(blob);
-                    const downloadBtn = document.getElementById('downloadVideoBtn');
-                    downloadBtn.href = url;
-                    document.getElementById('mediaPlayerContainer').style.display = 'flex';
-                };
-
-                mediaRecorder.start();
-                isVideoRecording = true;
-                recVideoBtn.innerText = "STOP REC";
-                recVideoBtn.classList.add("recording");
-
-                if (!isScrolling) toggleScroll();
-            } else {
-                mediaRecorder.stop();
-                isVideoRecording = false;
-                recVideoBtn.innerText = "REC VIDEO";
-                recVideoBtn.classList.remove("recording");
-                if (isScrolling) toggleScroll();
-            }
-        }
-
-        function closeMediaPlayer() {
-            document.getElementById('mediaPlayerContainer').style.display = 'none';
-        }
-
-        function openModal() {
-            if (isScrolling) toggleScroll();
-            const lib = getLibrary();
-            const activeTitle = scriptSelect.value;
-            scriptTitleInput.value = activeTitle || '';
-            scriptTextInput.value = lib[activeTitle] || '';
-            editModal.classList.add('open');
+        // Modal / Folder System
+        function openFolder() {
+            stopScroll();
+            renderFolderList();
+            showFolderView();
+            modal.classList.add('active');
         }
 
         function closeModal() {
-            editModal.classList.remove('open');
+            modal.classList.remove('active');
         }
 
-        function saveNewScript() {
-            const title = scriptTitleInput.value.trim() || "Untitled Script " + (Object.keys(getLibrary()).length + 1);
-            const text = scriptTextInput.value;
-            const lib = getLibrary();
-            lib[title] = text;
-            localStorage.setItem('active_script_title', title);
-            saveLibrary(lib);
+        function showFolderView() {
+            viewFolder.style.display = 'flex';
+            viewEditor.style.display = 'none';
+        }
+
+        function renderFolderList() {
+            scriptList.innerHTML = '';
+            scripts.forEach(s => {
+                const item = document.createElement('div');
+                item.className = 'script-item';
+                item.innerHTML = `
+                    <span>${s.title || 'Untitled'} ${s.id === activeScriptId ? '✓' : ''}</span>
+                    <div>
+                        <button onclick="selectScript('${s.id}')">LOAD</button>
+                        <button onclick="openEditor('${s.id}')">EDIT</button>
+                    </div>
+                `;
+                scriptList.appendChild(item);
+            });
+        }
+
+        window.selectScript = function(id) {
+            activeScriptId = id;
+            loadActiveScript();
             closeModal();
-            resetScroll();
+        };
+
+        window.openEditor = function(id = null) {
+            editingScriptId = id;
+            if (id) {
+                const s = scripts.find(item => item.id === id);
+                inputTitle.value = s.title;
+                inputBody.value = s.content;
+                document.getElementById('btn-delete-script').style.display = 'block';
+            } else {
+                inputTitle.value = '';
+                inputBody.value = '';
+                document.getElementById('btn-delete-script').style.display = 'none';
+            }
+            viewFolder.style.display = 'none';
+            viewEditor.style.display = 'flex';
+        };
+
+        function saveScript() {
+            const title = inputTitle.value.trim() || 'Untitled Script';
+            const content = inputBody.value;
+
+            if (editingScriptId) {
+                const s = scripts.find(item => item.id === editingScriptId);
+                s.title = title;
+                s.content = content;
+            } else {
+                const newId = Date.now().toString();
+                scripts.push({ id: newId, title, content });
+                activeScriptId = newId;
+            }
+
+            localStorage.setItem('prompter_scripts', JSON.stringify(scripts));
+            loadActiveScript();
+            renderFolderList();
+            showFolderView();
         }
 
-        function deleteCurrentScript() {
-            const activeTitle = scriptSelect.value;
-            const lib = getLibrary();
-            if (Object.keys(lib).length <= 1) {
-                alert("You must keep at least one script in your library.");
-                return;
+        function deleteScript() {
+            if (!editingScriptId) return;
+            scripts = scripts.filter(s => s.id !== editingScriptId);
+            if (activeScriptId === editingScriptId) {
+                activeScriptId = scripts[0] ? scripts[0].id : null;
             }
-            if (confirm(`Delete "${activeTitle}"?`)) {
-                delete lib[activeTitle];
-                const remainingTitles = Object.keys(lib);
-                localStorage.setItem('active_script_title', remainingTitles[0]);
-                saveLibrary(lib);
-                closeModal();
-                resetScroll();
-            }
+            localStorage.setItem('prompter_scripts', JSON.stringify(scripts));
+            loadActiveScript();
+            renderFolderList();
+            showFolderView();
         }
 
-        populateDropdown();
-        navigator.mediaDevices?.addEventListener('devicechange', populateMicrophones);
+        init();
     </script>
 </body>
 </html>
