@@ -442,7 +442,7 @@
         
         let animationFrameId = null;
         let isGridActive = false;
-        let originalEditingTitle = null; // Tracks title when renaming
+        let originalEditingTitle = null; 
 
         let cameraStream = null;
         let mediaRecorder = null;
@@ -526,7 +526,7 @@
             const lib = getLibrary();
             if (lib[title]) {
                 localStorage.setItem('active_script_title', title);
-                populateDropdown(); // Syncs dropdown
+                populateDropdown(); 
                 resetScroll();
                 closeModal();
             }
@@ -563,7 +563,7 @@
                 const isLoaded = title === activeTitle;
                 const item = document.createElement('div');
                 item.className = 'script-item';
-                if (isLoaded) item.style.borderColor = '#fff'; // Highlight active script
+                if (isLoaded) item.style.borderColor = '#fff'; 
 
                 item.innerHTML = `
                     <div class="script-item-title">${title} ${isLoaded ? '(ACTIVE)' : ''}</div>
@@ -604,10 +604,8 @@
                 newTitle = "Untitled Script " + (Object.keys(lib).length + 1);
             }
 
-            // If renaming, remove the old key
             if (originalEditingTitle && originalEditingTitle !== newTitle) {
                 delete lib[originalEditingTitle];
-                // If the renamed script was the active one, update tracker
                 if (localStorage.getItem('active_script_title') === originalEditingTitle) {
                     localStorage.setItem('active_script_title', newTitle);
                 }
@@ -616,7 +614,6 @@
             lib[newTitle] = text;
             saveLibrary(lib);
             
-            // Automatically make the newly saved script active
             localStorage.setItem('active_script_title', newTitle);
             populateDropdown(); 
             
@@ -658,7 +655,7 @@
         function toggleScroll() {
             triggerNativeFullscreen();
             const lib = getLibrary();
-            if(Object.keys(lib).length === 0) return; // Prevent scroll if empty
+            if(Object.keys(lib).length === 0) return; 
 
             isScrolling = !isScrolling;
             if (isScrolling) {
@@ -741,7 +738,7 @@
             root.style.setProperty('--bg-color', themeColors[currentThemeIndex].bg);
         }
 
-        // --- CAMERA & VIDEO ---
+        // --- CAMERA & VIDEO (Optimized for Raw Quality) ---
         async function populateMicrophones() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -772,13 +769,25 @@
                 const targetWidth = targetHeight === 2160 ? 3840 : (targetHeight === 1080 ? 1920 : 1280);
                 const selectedMicId = micSelect.value;
 
+                // Create constraints that disable web-conferencing filters for better raw audio
+                const audioConstraints = {
+                    echoCancellation: false,
+                    autoGainControl: false,
+                    noiseSuppression: false,
+                    sampleRate: 48000
+                };
+                if (selectedMicId) {
+                    audioConstraints.deviceId = { exact: selectedMicId };
+                }
+
                 const constraints = {
                     video: {
                         facingMode: "user",
                         width: { ideal: targetWidth },
-                        height: { ideal: targetHeight }
+                        height: { ideal: targetHeight },
+                        frameRate: { ideal: 30, max: 60 }
                     },
-                    audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+                    audio: audioConstraints
                 };
 
                 try {
@@ -828,9 +837,11 @@
                 if (!cameraStream) return;
 
                 recordedChunks = [];
+                // Increased bitrates for higher quality video and audio captures
                 const options = {
                     mimeType: 'video/webm;codecs=vp9,opus',
-                    videoBitsPerSecond: 12000000 
+                    videoBitsPerSecond: 20000000, 
+                    audioBitsPerSecond: 128000
                 };
 
                 try {
@@ -869,6 +880,18 @@
         function closeMediaPlayer() {
             document.getElementById('mediaPlayerContainer').style.display = 'none';
         }
+
+        // --- VISIBILITY LISTENER (Auto-Kill Camera in Background) ---
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && cameraStream) {
+                if (isVideoRecording) {
+                    // Safely stop recording so the file can still be downloaded
+                    toggleVideoRecording(); 
+                }
+                // Turn off the hardware feed
+                toggleCamera(); 
+            }
+        });
 
         // Initialize Data and Events
         populateDropdown();
