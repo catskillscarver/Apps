@@ -75,10 +75,11 @@
         }
 
         .speed-btn {
-            width: 36px;
-            font-size: 16px;
+            width: 44px;
+            height: 40px;
+            font-size: 20px;
             font-weight: bold;
-            touch-action: manipulation;
+            touch-action: none;
         }
 
         /* Script Manager Modal */
@@ -216,11 +217,17 @@
         let speed = parseInt(localStorage.getItem('prompter_speed')) || 35;
         let isScrolling = false;
         let scrollInterval = null;
-        let speedHoldTimer = null;
-        let speedHoldInterval = null;
+        let holdTimer = null;
+        let holdInterval = null;
 
         const themes = ['theme-green', 'theme-amber', 'theme-blue'];
-        let currentThemeIdx = parseInt(localStorage.getItem('prompter_theme_idx')) || 0;
+        let currentThemeIdx = 0; // Always start green on fresh load
+
+        // Load saved theme if present
+        const savedTheme = localStorage.getItem('prompter_theme_name');
+        if (savedTheme && themes.includes(savedTheme)) {
+            currentThemeIdx = themes.indexOf(savedTheme);
+        }
 
         // Elements
         const display = document.getElementById('prompter-display');
@@ -252,8 +259,8 @@
             btnScripts.addEventListener('click', openFolder);
             document.getElementById('btn-close-modal').addEventListener('click', closeModal);
             
-            setupHoldButton(btnSpeedUp, 1);
-            setupHoldButton(btnSpeedDown, -1);
+            bindHoldEvent(btnSpeedUp, 1);
+            bindHoldEvent(btnSpeedDown, -1);
 
             document.getElementById('btn-new-script').addEventListener('click', () => openEditor());
             document.getElementById('btn-cancel-edit').addEventListener('click', showFolderView);
@@ -264,7 +271,7 @@
         // Theme management
         function applyTheme() {
             document.body.className = themes[currentThemeIdx];
-            localStorage.setItem('prompter_theme_idx', currentThemeIdx);
+            localStorage.setItem('prompter_theme_name', themes[currentThemeIdx]);
         }
 
         function cycleTheme() {
@@ -272,12 +279,12 @@
             applyTheme();
         }
 
-        // Speed adjustment with Press & Hold support
+        // Speed adjustment
         function changeSpeed(delta) {
             speed = Math.max(5, Math.min(100, speed + delta));
             updateSpeedDisplay();
             if (isScrolling) {
-                startScroll(); // Reset interval timing
+                startScroll();
             }
         }
 
@@ -286,25 +293,26 @@
             localStorage.setItem('prompter_speed', speed);
         }
 
-        function setupHoldButton(btn, delta) {
-            const start = (e) => {
+        // Press & Hold Logic for + and -
+        function bindHoldEvent(btn, delta) {
+            const startHold = (e) => {
                 e.preventDefault();
                 changeSpeed(delta);
-                speedHoldTimer = setTimeout(() => {
-                    speedHoldInterval = setInterval(() => changeSpeed(delta), 80);
-                }, 300);
+                clearHold();
+                holdTimer = setTimeout(() => {
+                    holdInterval = setInterval(() => changeSpeed(delta), 60);
+                }, 250);
             };
 
-            const stop = () => {
-                clearTimeout(speedHoldTimer);
-                clearInterval(speedHoldInterval);
+            const clearHold = () => {
+                if (holdTimer) clearTimeout(holdTimer);
+                if (holdInterval) clearInterval(holdInterval);
             };
 
-            btn.addEventListener('mousedown', start);
-            btn.addEventListener('mouseup', stop);
-            btn.addEventListener('mouseleave', stop);
-            btn.addEventListener('touchstart', start);
-            btn.addEventListener('touchend', stop);
+            btn.addEventListener('pointerdown', startHold);
+            btn.addEventListener('pointerup', clearHold);
+            btn.addEventListener('pointercancel', clearHold);
+            btn.addEventListener('pointerleave', clearHold);
         }
 
         // Scrolling Logic
