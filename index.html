@@ -12,8 +12,8 @@
     <meta name="theme-color" content="#0c0a05">
 
     <!-- Linked App Icon & Manifest -->
-    <link rel="icon" type="image/svg+xml" href="icon.svg">
-    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="icon" type="image/svg+xml" href="icon.svg?v=2">
+    <link rel="apple-touch-icon" href="icon.svg?v=2">
     <link rel="manifest" href="manifest.json">
 
     <style>
@@ -191,7 +191,7 @@
             cursor: pointer;
             border-radius: 2px;
             text-transform: uppercase;
-            touch-action: manipulation; /* Prevents double-tap zooming on buttons */
+            touch-action: manipulation;
         }
 
         button:active, button.active {
@@ -205,7 +205,7 @@
             line-height: 1;
             min-width: 28px;
             text-align: center;
-            touch-action: none; /* Required for smooth press-and-hold on touchscreens */
+            touch-action: none;
             user-select: none;
         }
 
@@ -239,7 +239,7 @@
             width: 50px;
         }
 
-        /* MODAL */
+        /* NEW FOLDER & EDITOR MODAL SYSTEM */
         .modal {
             display: none;
             position: fixed;
@@ -248,27 +248,52 @@
             z-index: 400;
             padding: 20px;
             flex-direction: column;
-            gap: 12px;
         }
 
         .modal.open {
             display: flex;
         }
 
-        .modal input[type="text"], .modal textarea {
+        .modal-header {
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            border-bottom: 2px solid var(--main-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        /* Folder View Specifics */
+        #folderView { display: flex; flex-direction: column; height: 100%; }
+        #scriptList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+        .script-item {
+            border: 1px solid var(--main-color);
+            background: rgba(20, 18, 12, 0.8);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .script-item-title { font-size: 16px; font-weight: bold; word-break: break-all; }
+        .script-item-actions { display: flex; gap: 8px; }
+        .script-item-actions button { flex: 1; padding: 10px; font-size: 14px; }
+
+        /* Editor View Specifics */
+        #editorView { display: none; flex-direction: column; height: 100%; }
+        #scriptTitleInput, #scriptTextInput {
             background: #050505;
             color: var(--main-color);
             border: 1px solid var(--main-color);
-            padding: 10px;
+            padding: 12px;
             font-family: 'Courier New', Courier, monospace;
             outline: none;
+            width: 100%;
+            margin-bottom: 15px;
         }
-
-        .modal textarea {
-            flex: 1;
-            font-size: 16px;
-            resize: none;
-        }
+        #scriptTitleInput { font-size: 16px; font-weight: bold; }
+        #scriptTextInput { flex: 1; font-size: 16px; resize: none; }
+        .editor-actions { display: flex; gap: 10px; justify-content: space-between; }
+        .editor-actions button { flex: 1; padding: 12px; font-size: 14px; }
 
         /* MEDIA PLAYBACK PANEL */
         #mediaPlayerContainer {
@@ -331,13 +356,13 @@
                 <option value="720">720p HD</option>
             </select>
             <button id="gridToggleBtn" onclick="toggleGrid()">GRID</button>
-            <select id="scriptSelect" onchange="loadSelectedScript()"></select>
-            <button onclick="openModal()">SCRIPTS</button>
+            <select id="scriptSelect" onchange="loadSelectedFromDropdown()"></select>
+            <button onclick="openScriptManager()">SCRIPTS</button>
             <button id="colorBtn" onclick="toggleColor()">COLOR</button>
             <button id="flipBtn" onclick="toggleMirror()">MIRROR</button>
         </div>
 
-        <!-- FINE-TUNING SPEED CONTROLS (Updated for Hold-to-Adjust) -->
+        <!-- FINE-TUNING SPEED CONTROLS (Hold-to-Adjust) -->
         <div class="control-group">
             <span class="slider-label">SPD</span>
             <button class="step-btn" id="btnSpeedDown">–</button>
@@ -354,23 +379,40 @@
         <button onclick="closeMediaPlayer()">DISMISS</button>
     </div>
 
-    <!-- Script Manager Modal -->
-    <div class="modal" id="editModal">
-        <h3 style="color: var(--main-color);">SCRIPT MANAGER</h3>
-        <input type="text" id="scriptTitleInput" placeholder="Script Title...">
-        <textarea id="scriptTextInput" placeholder="Paste your script text here..."></textarea>
-        <div style="display: flex; gap: 10px; justify-content: space-between; flex-wrap: wrap;">
-            <button onclick="deleteCurrentScript()" style="border-color: var(--crt-red); color: var(--crt-red);">DELETE</button>
-            <div style="display: flex; gap: 10px;">
-                <button onclick="closeModal()">CANCEL</button>
-                <button onclick="saveNewScript()" style="background: var(--main-color); color: #000;">SAVE</button>
+    <!-- SCRIPT MANAGER MODAL (Folder & Editor) -->
+    <div class="modal" id="scriptManagerModal">
+        
+        <!-- FOLDER VIEW -->
+        <div id="folderView">
+            <div class="modal-header">
+                <h3 style="color: var(--main-color);">SCRIPT FOLDER</h3>
+                <button onclick="closeModal()" style="padding: 6px 12px; font-size: 16px;">X</button>
+            </div>
+            <div id="scriptList">
+                <!-- Scripts are injected here via JS -->
+            </div>
+            <button onclick="openEditor()" style="background: var(--main-color); color: #000; padding: 15px; font-size: 18px; width: 100%;">+ NEW SCRIPT</button>
+        </div>
+
+        <!-- EDITOR VIEW -->
+        <div id="editorView">
+            <div class="modal-header">
+                <h3 style="color: var(--main-color);" id="editorHeader">EDIT SCRIPT</h3>
+            </div>
+            <input type="text" id="scriptTitleInput" placeholder="Enter Script Title...">
+            <textarea id="scriptTextInput" placeholder="Paste your script text here..."></textarea>
+            <div class="editor-actions">
+                <button onclick="showFolderView()" style="border-color: #888; color: #aaa;">CANCEL</button>
+                <button onclick="saveCurrentScript()" style="background: var(--main-color); color: #000;">SAVE SCRIPT</button>
             </div>
         </div>
+
     </div>
 
     <script>
+        // NEW DEFAULT DEMO SCRIPT
         const defaultLibrary = {
-            "Default - Preservation": `Every piece of fallen timber\n\nhas a story\n\nthat is supposed to end in decay.\n\n\nAs carvers,\n\nwe interrupt that ending.\n\n\nWe force the wood\n\nto take a new breath.\n\n\nWe carve a second life into it.\n\n\nBut no matter how beautiful it becomes,\n\nit’s still on borrowed time.\n\n\nEventually,\n\nthe earth always calls it back.\n\n\nUnless we change the rules.\n\n\nThis step right here...\n\nthis isn't just about making a reproduction.\n\n\nIt’s about preservation.\n\n\nBy taking a fleeting moment\n\nand casting it into stone,\n\nwe freeze time.\n\n\nWe lock the effort,\n\nthe vision,\n\nand the soul of the piece\n\ninto something completely permanent.\n\n\nThis is how I preserve the tree.\n\n\nIt’s how I preserve the art.\n\n\nAnd ultimately,\n\nit’s how I preserve a piece of myself.\n\n\nA permanent gift for my family,\n\nand a quiet monument for the world...\n\n\nlong after the sawdust settles.`
+            "Demo Script": `This is a simple demo script.\n\nUse the SCRIPTS button below to open your folder.\n\nFrom there, you can add new scripts, delete this one, or rename files easily.\n\nHappy carving.`
         };
 
         let isScrolling = false;
@@ -384,16 +426,23 @@
         let framingGrid = document.getElementById('framingGrid');
         let textContent = document.getElementById('textContent');
         let scriptDisplay = document.getElementById('scriptDisplay');
-        let scriptTitleInput = document.getElementById('scriptTitleInput');
-        let scriptTextInput = document.getElementById('scriptTextInput');
         let scriptSelect = document.getElementById('scriptSelect');
         let micSelect = document.getElementById('micSelect');
         let qualitySelect = document.getElementById('qualitySelect');
         let speedSlider = document.getElementById('speedSlider');
         let speedVal = document.getElementById('speedVal');
-        let editModal = document.getElementById('editModal');
+        
+        let scriptManagerModal = document.getElementById('scriptManagerModal');
+        let folderView = document.getElementById('folderView');
+        let editorView = document.getElementById('editorView');
+        let scriptList = document.getElementById('scriptList');
+        let scriptTitleInput = document.getElementById('scriptTitleInput');
+        let scriptTextInput = document.getElementById('scriptTextInput');
+        let editorHeader = document.getElementById('editorHeader');
+        
         let animationFrameId = null;
         let isGridActive = false;
+        let originalEditingTitle = null; // Tracks title when renaming
 
         let cameraStream = null;
         let mediaRecorder = null;
@@ -416,6 +465,7 @@
             }
         }
 
+        // --- SCRIPT LIBRARY MANAGEMENT ---
         function getLibrary() {
             const data = localStorage.getItem('teleprompter_library');
             return data ? JSON.parse(data) : defaultLibrary;
@@ -429,16 +479,32 @@
         function populateDropdown() {
             const lib = getLibrary();
             scriptSelect.innerHTML = '';
-            for (let title in lib) {
+            const titles = Object.keys(lib);
+            
+            if (titles.length === 0) {
+                let opt = document.createElement('option');
+                opt.value = "";
+                opt.innerText = "NO SCRIPTS";
+                scriptSelect.appendChild(opt);
+                scriptDisplay.innerHTML = "";
+                return;
+            }
+
+            for (let title of titles) {
                 let opt = document.createElement('option');
                 opt.value = title;
                 opt.innerText = title;
                 scriptSelect.appendChild(opt);
             }
-            const activeTitle = localStorage.getItem('active_script_title') || Object.keys(lib)[0];
-            if (lib[activeTitle]) {
+
+            const activeTitle = localStorage.getItem('active_script_title');
+            if (activeTitle && lib[activeTitle]) {
                 scriptSelect.value = activeTitle;
                 displayScript(lib[activeTitle]);
+            } else {
+                scriptSelect.value = titles[0];
+                localStorage.setItem('active_script_title', titles[0]);
+                displayScript(lib[titles[0]]);
             }
         }
 
@@ -446,7 +512,7 @@
             scriptDisplay.innerHTML = text.replace(/\n/g, '<br>');
         }
 
-        function loadSelectedScript() {
+        function loadSelectedFromDropdown() {
             const lib = getLibrary();
             const selectedTitle = scriptSelect.value;
             if (lib[selectedTitle]) {
@@ -456,6 +522,128 @@
             }
         }
 
+        function loadScriptFromFolder(title) {
+            const lib = getLibrary();
+            if (lib[title]) {
+                localStorage.setItem('active_script_title', title);
+                populateDropdown(); // Syncs dropdown
+                resetScroll();
+                closeModal();
+            }
+        }
+
+        // --- FOLDER & EDITOR MODAL SYSTEM ---
+        function openScriptManager() {
+            if (isScrolling) toggleScroll();
+            renderFolderList();
+            showFolderView();
+            scriptManagerModal.classList.add('open');
+        }
+
+        function closeModal() {
+            scriptManagerModal.classList.remove('open');
+        }
+
+        function showFolderView() {
+            editorView.style.display = 'none';
+            folderView.style.display = 'flex';
+        }
+
+        function renderFolderList() {
+            const lib = getLibrary();
+            scriptList.innerHTML = '';
+            const activeTitle = localStorage.getItem('active_script_title');
+
+            if (Object.keys(lib).length === 0) {
+                scriptList.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">Folder is empty.</div>';
+                return;
+            }
+
+            for (let title in lib) {
+                const isLoaded = title === activeTitle;
+                const item = document.createElement('div');
+                item.className = 'script-item';
+                if (isLoaded) item.style.borderColor = '#fff'; // Highlight active script
+
+                item.innerHTML = `
+                    <div class="script-item-title">${title} ${isLoaded ? '(ACTIVE)' : ''}</div>
+                    <div class="script-item-actions">
+                        <button onclick="loadScriptFromFolder('${title.replace(/'/g, "\\'")}')" style="background: ${isLoaded ? 'var(--main-color)' : '#242014'}; color: ${isLoaded ? '#000' : 'var(--main-color)'};">LOAD</button>
+                        <button onclick="openEditor('${title.replace(/'/g, "\\'")}')">EDIT</button>
+                        <button onclick="deleteScript('${title.replace(/'/g, "\\'")}')" style="border-color: var(--crt-red); color: var(--crt-red);">DEL</button>
+                    </div>
+                `;
+                scriptList.appendChild(item);
+            }
+        }
+
+        function openEditor(title = null) {
+            const lib = getLibrary();
+            originalEditingTitle = title;
+
+            if (title && lib[title]) {
+                editorHeader.innerText = "EDIT SCRIPT";
+                scriptTitleInput.value = title;
+                scriptTextInput.value = lib[title];
+            } else {
+                editorHeader.innerText = "NEW SCRIPT";
+                scriptTitleInput.value = "";
+                scriptTextInput.value = "";
+            }
+
+            folderView.style.display = 'none';
+            editorView.style.display = 'flex';
+        }
+
+        function saveCurrentScript() {
+            let newTitle = scriptTitleInput.value.trim();
+            const text = scriptTextInput.value;
+            const lib = getLibrary();
+
+            if (!newTitle) {
+                newTitle = "Untitled Script " + (Object.keys(lib).length + 1);
+            }
+
+            // If renaming, remove the old key
+            if (originalEditingTitle && originalEditingTitle !== newTitle) {
+                delete lib[originalEditingTitle];
+                // If the renamed script was the active one, update tracker
+                if (localStorage.getItem('active_script_title') === originalEditingTitle) {
+                    localStorage.setItem('active_script_title', newTitle);
+                }
+            }
+
+            lib[newTitle] = text;
+            saveLibrary(lib);
+            
+            // Automatically make the newly saved script active
+            localStorage.setItem('active_script_title', newTitle);
+            populateDropdown(); 
+            
+            renderFolderList();
+            showFolderView();
+        }
+
+        function deleteScript(title) {
+            if (confirm(`Are you sure you want to delete "${title}"?`)) {
+                const lib = getLibrary();
+                delete lib[title];
+                
+                const remainingTitles = Object.keys(lib);
+                if (localStorage.getItem('active_script_title') === title) {
+                    if (remainingTitles.length > 0) {
+                        localStorage.setItem('active_script_title', remainingTitles[0]);
+                    } else {
+                        localStorage.removeItem('active_script_title');
+                    }
+                }
+                
+                saveLibrary(lib);
+                renderFolderList();
+            }
+        }
+
+        // --- SCROLLING & SPEED ---
         function scrollStep() {
             if (isScrolling) {
                 scrollBox.scrollTop += scrollSpeed / 10;
@@ -469,6 +657,9 @@
 
         function toggleScroll() {
             triggerNativeFullscreen();
+            const lib = getLibrary();
+            if(Object.keys(lib).length === 0) return; // Prevent scroll if empty
+
             isScrolling = !isScrolling;
             if (isScrolling) {
                 toggleBtn.innerText = "PAUSE";
@@ -482,7 +673,7 @@
         }
 
         function handleContainerClick(e) {
-            if (e.target.closest('.controls') || e.target.closest('#mediaPlayerContainer')) return;
+            if (e.target.closest('.controls') || e.target.closest('#mediaPlayerContainer') || e.target.closest('.modal')) return;
             toggleScroll();
         }
 
@@ -503,12 +694,46 @@
             updateSpeed(newVal);
         }
 
+        function bindHoldEvent(btn, delta) {
+            let holdTimer = null;
+            let holdInterval = null;
+
+            const startHold = (e) => {
+                e.preventDefault(); 
+                adjustSpeed(delta);
+                clearHold();
+                holdTimer = setTimeout(() => {
+                    holdInterval = setInterval(() => adjustSpeed(delta), 60);
+                }, 250);
+            };
+
+            const clearHold = () => {
+                if (holdTimer) clearTimeout(holdTimer);
+                if (holdInterval) clearInterval(holdInterval);
+            };
+
+            btn.addEventListener('pointerdown', startHold);
+            btn.addEventListener('pointerup', clearHold);
+            btn.addEventListener('pointercancel', clearHold);
+            btn.addEventListener('pointerleave', clearHold);
+            btn.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        function handleManualScroll() {
+            if (isScrolling) {
+                toggleScroll();
+            }
+        }
+
+        scrollBox.addEventListener('wheel', handleManualScroll, { passive: true });
+        scrollBox.addEventListener('touchmove', handleManualScroll, { passive: true });
+
+        // --- VISUAL TWEAKS (Mirror & Color) ---
         function toggleMirror() {
             textContent.classList.toggle('flipped');
             document.getElementById('flipBtn').classList.toggle('active');
         }
 
-        // Updated Color Cycle Function
         function toggleColor() {
             currentThemeIndex = (currentThemeIndex + 1) % themeColors.length;
             const root = document.documentElement;
@@ -516,6 +741,7 @@
             root.style.setProperty('--bg-color', themeColors[currentThemeIndex].bg);
         }
 
+        // --- CAMERA & VIDEO ---
         async function populateMicrophones() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -643,84 +869,6 @@
         function closeMediaPlayer() {
             document.getElementById('mediaPlayerContainer').style.display = 'none';
         }
-
-        function openModal() {
-            if (isScrolling) toggleScroll();
-            const lib = getLibrary();
-            const activeTitle = scriptSelect.value;
-            scriptTitleInput.value = activeTitle || '';
-            scriptTextInput.value = lib[activeTitle] || '';
-            editModal.classList.add('open');
-        }
-
-        function closeModal() {
-            editModal.classList.remove('open');
-        }
-
-        function saveNewScript() {
-            const title = scriptTitleInput.value.trim() || "Untitled Script " + (Object.keys(getLibrary()).length + 1);
-            const text = scriptTextInput.value;
-            const lib = getLibrary();
-            lib[title] = text;
-            localStorage.setItem('active_script_title', title);
-            saveLibrary(lib);
-            closeModal();
-            resetScroll();
-        }
-
-        function deleteCurrentScript() {
-            const activeTitle = scriptSelect.value;
-            const lib = getLibrary();
-            if (Object.keys(lib).length <= 1) {
-                alert("You must keep at least one script in your library.");
-                return;
-            }
-            if (confirm(`Delete "${activeTitle}"?`)) {
-                delete lib[activeTitle];
-                const remainingTitles = Object.keys(lib);
-                localStorage.setItem('active_script_title', remainingTitles[0]);
-                saveLibrary(lib);
-                closeModal();
-                resetScroll();
-            }
-        }
-
-        // Press & Hold Logic for Speed Buttons
-        function bindHoldEvent(btn, delta) {
-            let holdTimer = null;
-            let holdInterval = null;
-
-            const startHold = (e) => {
-                e.preventDefault(); 
-                adjustSpeed(delta);
-                clearHold();
-                holdTimer = setTimeout(() => {
-                    holdInterval = setInterval(() => adjustSpeed(delta), 60);
-                }, 250);
-            };
-
-            const clearHold = () => {
-                if (holdTimer) clearTimeout(holdTimer);
-                if (holdInterval) clearInterval(holdInterval);
-            };
-
-            btn.addEventListener('pointerdown', startHold);
-            btn.addEventListener('pointerup', clearHold);
-            btn.addEventListener('pointercancel', clearHold);
-            btn.addEventListener('pointerleave', clearHold);
-            btn.addEventListener('contextmenu', e => e.preventDefault());
-        }
-
-        // Auto-pause when user manually scrolls
-        function handleManualScroll() {
-            if (isScrolling) {
-                toggleScroll();
-            }
-        }
-
-        // Listen for touch drag or mouse wheel events to pause playback
-        scrollBox.addEventListener('wheel', handleManualScroll, { passive: true });
-        scrollBox.addEventListener('touchmove', handleManualScroll, { passive: true });
 
         // Initialize Data and Events
         populateDropdown();
