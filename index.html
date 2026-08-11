@@ -711,6 +711,17 @@
             btn.addEventListener('contextmenu', e => e.preventDefault());
         }
 
+        // Auto-pause when user manually scrolls
+        function handleManualScroll() {
+            if (isScrolling) {
+                toggleScroll();
+            }
+        }
+
+        // Listen for touch drag or mouse wheel events to pause playback
+        scrollBox.addEventListener('wheel', handleManualScroll, { passive: true });
+        scrollBox.addEventListener('touchmove', handleManualScroll, { passive: true });
+
         // Initialize Data and Events
         populateDropdown();
         navigator.mediaDevices?.addEventListener('devicechange', populateMicrophones);
